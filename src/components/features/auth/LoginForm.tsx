@@ -6,8 +6,12 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import RegisterForm from "./RegisterForm";
 import { login } from "@/api/auth";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("next") ?? "/change-password";
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
@@ -23,10 +27,11 @@ export default function LoginForm() {
     setErrorMsg(null);
     try {
       const res = await login({ username, password });
-      console.log("đăng nhập thành công", res);
       // TODO: chuyển trang sau khi đăng nhập thành công
       // ví dụ: window.location.href = "/dashboard";
+      router.replace(redirectTo);
       console.log("Login OK:", res);
+      return;
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||

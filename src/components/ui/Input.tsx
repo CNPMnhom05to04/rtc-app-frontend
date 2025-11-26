@@ -1,21 +1,34 @@
-import { InputHTMLAttributes } from "react";
-import clsx from "clsx";
+"use client";
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
+import * as React from "react";
+
+function cn(...cls: Array<string | false | null | undefined>) {
+  return cls.filter(Boolean).join(" ");
 }
 
-export default function Input({ label, className, ...props }: InputProps) {
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
+  { className, ...props },
+  ref
+) {
   return (
-    <div className="space-y-1">
-      {label && <label className="block text-sm font-medium">{label}</label>}
-      <input
-        {...props}
-        className={clsx(
-          "w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500",
-          className
-        )}
-      />
-    </div>
+    <input
+      ref={ref}
+      {...props}
+      className={cn(
+        // nền trắng + viền rõ
+        "w-full rounded-lg border border-gray-300 bg-white px-4 py-2",
+        // chữ đậm, placeholder xám, caret đen
+        "text-gray-900 placeholder-gray-400 caret-gray-900",
+        // trạng thái focus
+        "focus:outline-none focus:ring-2 focus:ring-[#2F327D] focus:border-[#2F327D]",
+        // trạng thái disabled
+        "disabled:opacity-60 disabled:cursor-not-allowed",
+        className
+      )}
+    />
   );
-}
+});
+
+export default Input;
