@@ -2,57 +2,78 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
 
 export default function CreateRoomForm() {
     const router = useRouter();
+
     const [name, setName] = useState("");
     const [roomId, setRoomId] = useState("");
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     function onSubmit(e: React.FormEvent) {
         e.preventDefault();
         const n = name.trim();
         const r = roomId.trim();
-        if (!n || !r) return;
+
+        if (!n || !r) {
+            setErrorMsg("Vui lòng nhập đầy đủ Tên hiển thị và Mã phòng.");
+            return;
+        }
+
+        setErrorMsg(null);
         // Join = auto-create room nếu chưa tồn tại
         router.push(`/room/${encodeURIComponent(r)}?name=${encodeURIComponent(n)}`);
     }
 
     return (
-        <form onSubmit={onSubmit} className="mx-auto w-full max-w-md space-y-4 rounded-xl border p-6">
-            <h1 className="text-xl font-semibold">Tham gia phòng</h1>
+        <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-lg">
+            <h2 className="text-xl font-medium text-center text-black">
+                Tham gia phòng học
+            </h2>
 
-            <div className="space-y-1">
-                <label className="text-sm font-medium">Tên hiển thị</label>
-                <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="VD: Tùng"
-                    className="w-full rounded-md border px-3 py-2 outline-none"
-                    required
-                />
-            </div>
+            <p className="text-sm text-black text-center">
+                Nhập tên hiển thị và mã phòng để tham gia buổi học trực tuyến trên hệ thống.
+            </p>
 
-            <div className="space-y-1">
-                <label className="text-sm font-medium">Mã phòng</label>
-                <input
-                    type="text"
-                    value={roomId}
-                    onChange={(e) => setRoomId(e.target.value)}
-                    placeholder="VD: room-001"
-                    className="w-full rounded-md border px-3 py-2 outline-none"
-                    required
-                />
-            </div>
+            <form className="space-y-4" onSubmit={onSubmit}>
+                <div>
+                    <label className="block mb-1 text-sm font-medium text-black">
+                        Tên hiển thị
+                    </label>
+                    <Input
+                        placeholder="VD: Tùng"
+                        className="text-[#ACACAC]"
+                        value={name}
+                        onChange={(e: any) => setName(e.target.value)}
+                    />
+                </div>
 
-            <button
-                type="submit"
-                className="w-full rounded-md bg-black px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-60"
-                disabled={!name.trim() || !roomId.trim()}
-            >
-                Vào phòng
-            </button>
+                <div>
+                    <label className="block mb-1 text-sm font-medium text-black">
+                        Mã phòng
+                    </label>
+                    <Input
+                        placeholder="VD: room-001"
+                        className="text-[#ACACAC]"
+                        value={roomId}
+                        onChange={(e: any) => setRoomId(e.target.value)}
+                    />
+                </div>
 
-        </form>
+                {errorMsg && (
+                    <div className="text-red-600 text-sm">{errorMsg}</div>
+                )}
+
+                <Button
+                    type="submit"
+                    className="w-full bg-[#2F327D] text-white hover:opacity-90 disabled:opacity-60"
+                    disabled={!name.trim() || !roomId.trim()}
+                >
+                    Vào phòng
+                </Button>
+            </form>
+        </div>
     );
 }

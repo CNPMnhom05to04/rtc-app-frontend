@@ -12,7 +12,7 @@ export async function fetchLivekitToken(roomName: string, participantName: strin
     return data.token;
 }
 
-// 👉 NEW: gọi API tạo phòng (nếu backend đã có)
+
 export async function createRoomViaApi(
     roomName: string,
     options?: { maxParticipants?: number; metadata?: string }
@@ -24,6 +24,6 @@ export async function createRoomViaApi(
         body: JSON.stringify({ roomName, ...options }),
     });
     if (!res.ok) throw new Error(`Create room error ${res.status}`);
-    // tuỳ backend trả gì, ở đây không cần dùng response, chỉ cần 2xx là OK
+
     return true;
 }

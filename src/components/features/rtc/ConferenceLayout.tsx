@@ -3,7 +3,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCameraImageProcessor } from "@/hooks/useCameraImageProcessor";
+import {
+    createDetectionSocket,
+    sendDetectionFrame,
+} from "@/api/detection"; // đổi path nếu bạn để trong auth.ts
 
 type MockConferenceProps = {
     roomId: string;
@@ -27,18 +30,104 @@ export default function MockConference({
     const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
     const isSharing = !!screenStream;
 
-    // Stream từ camera (video + audio) để đưa vào hook
+    // Stream từ camera (video + audio)
     const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+    const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
 
-    // Hook xử lý hình ảnh: stream frame cho AI và vẽ lên canvas
-    const { canvasRef } = useCameraImageProcessor(camOn ? cameraStream : null, {
-        intervalMs: 200, // ~5fps
-        onFrame: (frame) => {
-            // frame.imageData.data -> Uint8ClampedArray RGBA
-            // frame.width, frame.height, frame.timestamp
-            // TODO: đưa frame này cho AI (TF.js, ONNX, WebSocket...)
-        },
-    });
+    // WebSocket detection + canvas ẩn capture frame từ local preview
+    const detectionSocketRef = useRef<WebSocket | null>(null);
+    const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    /* ===================== DETECTION WS ===================== */
+
+    // Mở WebSocket detection một lần khi mount
+    useEffect(() => {
+        const ws = createDetectionSocket({
+            onMessage: (data) => {
+                // TODO: sau này có thể update UI (alert, log, ...)
+                console.log("[Detection]", data);
+            },
+        });
+
+        detectionSocketRef.current = ws;
+
+        return () => {
+            ws.close();
+            detectionSocketRef.current = null;
+        };
+    }, []);
+
+    // Capture frame từ LOCAL PREVIEW (cameraVideoRef) và gửi qua WS
+    useEffect(() => {
+        if (!camOn) return; // tắt cam thì dừng gửi frame
+        const video = cameraVideoRef.current;
+        if (!video) return;
+
+        let cancelled = false;
+
+        // tạo canvas ẩn nếu chưa có
+        if (!captureCanvasRef.current) {
+            captureCanvasRef.current = document.createElement("canvas");
+        }
+        const canvas = captureCanvasRef.current;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const intervalMs = 200; // ~5fps
+
+        const loop = () => {
+            if (cancelled) return;
+
+            const ws = detectionSocketRef.current;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                setTimeout(loop, intervalMs);
+                return;
+            }
+
+            // video đã có data
+            if (video.readyState >= 2) {
+                const vw = video.videoWidth;
+                const vh = video.videoHeight;
+
+                if (vw > 0 && vh > 0) {
+                    const targetWidth = 320;
+                    const targetHeight = Math.round((vh / vw) * targetWidth);
+
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+
+                    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+                    const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+                    const base64 = dataUrl.split(",")[1];
+
+                    // 🚀 dùng API mới
+                    sendDetectionFrame(ws, base64);
+                }
+            }
+
+            setTimeout(loop, intervalMs);
+        };
+
+        loop();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [camOn]);
+
+    /* ===================== CAMERA / SCREEN ===================== */
+
+    // Gắn cameraStream vào thẻ <video> (local preview)
+    useEffect(() => {
+        if (!cameraVideoRef.current) return;
+
+        if (cameraStream) {
+            cameraVideoRef.current.srcObject = cameraStream;
+        } else {
+            cameraVideoRef.current.srcObject = null;
+        }
+    }, [cameraStream]);
 
     // Lấy stream camera (getUserMedia) khi mic/cam thay đổi
     useEffect(() => {
@@ -126,7 +215,6 @@ export default function MockConference({
 
     // Danh sách người tham gia (mock: hiện tại chỉ có bạn)
     const participants = [{ id: "self", name: name || "Bạn" }];
-
     const maxVisibleParticipants = 6;
     const visibleParticipants = participants.slice(0, maxVisibleParticipants);
     const hiddenCount = participants.length - visibleParticipants.length;
@@ -146,14 +234,16 @@ export default function MockConference({
 
             {/* Content */}
             <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 p-4">
-                {/* Khu chính: camera + (optional) share màn hình */}
-                {/* ✔ Luôn 2 cột trên desktop để khung không đổi size */}
+                {/* Khu chính: camera + share màn hình */}
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    {/* Ô camera – hiển thị từ hook (canvas) */}
+                    {/* Ô camera – local preview */}
                     <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-zinc-800 bg-black/80">
-                        <canvas
-                            ref={canvasRef}
-                            className="h-full w-full"
+                        <video
+                            ref={cameraVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="h-full w-full object-cover"
                         />
                         {(!camOn || !cameraStream) && (
                             <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
@@ -161,11 +251,11 @@ export default function MockConference({
                             </div>
                         )}
                         <div className="absolute left-2 top-2 rounded bg-white/80 px-2 py-1 text-xs text-black">
-                            Camera của bạn (qua hook)
+                            Camera của bạn (local preview)
                         </div>
                     </div>
 
-                    {/* Cột thứ 2: share màn hình nếu có, nếu không vẫn giữ 1 ô trống để layout ổn định */}
+                    {/* Cột thứ 2: share màn hình */}
                     <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-zinc-800 bg-black/40">
                         {isSharing ? (
                             <>
