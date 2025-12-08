@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-import "../styles/globals.css"; // đi ra khỏi app/ rồi vào styles/
+import "../styles/globals.css";
 
 import type { ReactNode } from 'react';
 
