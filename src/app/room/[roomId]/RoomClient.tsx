@@ -1,98 +1,103 @@
-// src/app/room/[roomId]/RoomClient.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LiveKitRoom, VideoConference } from "@livekit/components-react";
+import {
+    LiveKitRoom,
+    RoomAudioRenderer,
+} from "@livekit/components-react";
 import "@livekit/components-styles";
+
 import { fetchLivekitToken } from "@/lib/livekit";
 import { defaultLiveKitOptions } from "@/lib/livekitOptions";
+import ConferenceLayout from "@/components/features/rtc/ConferenceLayout";
+import DetectionOverlay from "@/components/features/rtc/DetectionOverlay";
 
 type RoomClientProps = {
-    roomName: string;
-    displayName: string;
+    roomName: string;     // chính là roomId trên URL
+    displayName: string;  // tên hiển thị
 };
 
 type Status = "loading" | "ready" | "error";
 
 export default function RoomClient({ roomName, displayName }: RoomClientProps) {
     const router = useRouter();
-    const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
-
+    const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL!;
     const [token, setToken] = useState<string | null>(null);
     const [status, setStatus] = useState<Status>("loading");
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
+    // Lấy token từ backend
     useEffect(() => {
-
-        if (!serverUrl) {
-            setStatus("error");
-            setErrorMessage("Thiếu cấu hình NEXT_PUBLIC_LIVEKIT_URL.");
-            return;
-        }
-
         let cancelled = false;
 
-        async function loadToken() {
+        (async () => {
             try {
                 setStatus("loading");
-
                 const t = await fetchLivekitToken(roomName, displayName);
-                if (cancelled) return;
-
-                setToken(t);
-                setStatus("ready");
-            } catch (err: any) {
-                if (cancelled) return;
-
-                setErrorMessage(err?.message ?? "Không lấy được token LiveKit.");
-                setStatus("error");
+                if (!cancelled) {
+                    setToken(t);
+                    setStatus("ready");
+                }
+            } catch (e) {
+                console.error(e);
+                if (!cancelled) {
+                    setError("Không lấy được token phòng.");
+                    setStatus("error");
+                }
             }
-        }
+        })();
 
-        loadToken();
-
-        // cleanup: nếu component bị unmount giữa chừng thì không setState nữa
         return () => {
             cancelled = true;
         };
-    }, [roomName, displayName, serverUrl]);
+    }, [roomName, displayName]);
 
-    const handleDisconnected = () => {
+    function handleDisconnected() {
         router.push("/rtc");
-    };
-
-    // UI trạng thái
-    if (status === "loading") {
-        return <div className="p-6">Đang kết nối phòng…</div>;
     }
 
-    if (status === "error" || !token) {
+    if (status === "loading") {
         return (
-            <div className="p-6 text-red-600">
-                Không thể vào phòng.
-                {errorMessage && (
-                    <div className="mt-1 text-sm">
-                        Chi tiết: {errorMessage}
-                    </div>
-                )}
+            <div className="flex h-[100dvh] items-center justify-center bg-black text-white">
+                Đang vào phòng...
             </div>
         );
     }
 
-    // Đến đây chắc chắn đã có token + serverUrl
+    if (status === "error" || !token) {
+        return (
+            <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-black text-white">
+                <p>{error ?? "Không thể vào phòng."}</p>
+                <button
+                    onClick={() => router.push("/rtc")}
+                    className="rounded-md bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
+                >
+                    Quay lại trang tạo / tham gia phòng
+                </button>
+            </div>
+        );
+    }
+
     return (
         <LiveKitRoom
             token={token}
-            serverUrl={serverUrl!}
+            serverUrl={serverUrl}
             connect
             video
             audio
-            options={defaultLiveKitOptions} // ✅ bật simulcast + adaptive + dynacast
+            options={defaultLiveKitOptions}
             onDisconnected={handleDisconnected}
+            data-lk-theme="default"
             style={{ height: "100dvh" }}
         >
-            <VideoConference />
+            {/* Detection overlay: captures camera and draws bounding boxes */}
+            <DetectionOverlay fps={1} />
+            {/* ✅ Khung hiển thị camera + tên phòng + control bar */}
+            <ConferenceLayout roomId={roomName} displayName={displayName} />
+
+            {/* ✅ Phát toàn bộ audio trong phòng */}
+            <RoomAudioRenderer />
         </LiveKitRoom>
     );
 }

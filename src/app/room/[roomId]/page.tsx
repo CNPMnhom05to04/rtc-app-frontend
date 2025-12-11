@@ -1,26 +1,21 @@
 // src/app/room/[roomId]/page.tsx
+
 import RoomClient from "./RoomClient";
 
 type RoomPageProps = {
-    params: { roomId: string };
-    searchParams: { name?: string };
+    params: Promise<{ roomId: string }>;
+    searchParams: Promise<{ name?: string }>;
 };
 
-export default function RoomPage({ params, searchParams }: RoomPageProps) {
-    // roomId lấy từ URL /room/[roomId]
-    const roomName = decodeURIComponent(params.roomId);
+export default async function RoomPage(props: RoomPageProps) {
+    const { roomId: rawRoomId } = await props.params;
+    const { name: rawName } = await props.searchParams;
 
-
-    const rawName = searchParams.name;
+    const roomName = decodeURIComponent(rawRoomId);
     const displayName =
         typeof rawName === "string" && rawName.trim().length > 0
             ? rawName.trim()
             : "Guest";
 
-    return (
-        <RoomClient
-            roomName={roomName}
-            displayName={displayName}
-        />
-    );
+    return <RoomClient roomName={roomName} displayName={displayName} />;
 }
